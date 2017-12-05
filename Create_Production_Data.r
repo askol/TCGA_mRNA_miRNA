@@ -58,8 +58,8 @@ Create_mRNA_Data <- function(project, use.existing.gene.info = TRUE){
     }
     map$case.id <- paste0("A",map$cases.0.case_id)
     gender <- map[,c("case.id", "gender")]
-    rm.dupes <- which(duplicated(gender$cases.0.case_id))
-    if (length(rm.dupes) > 0({
+    rm.dupes <- which(duplicated(gender$case.id))
+    if (length(rm.dupes) > 0){
         gender <- gender[-rm.dupes,]
     }
     group <- data.frame(case.id = names(CountData)[-c(1:2)])
@@ -162,7 +162,7 @@ Create_mRNA_Data <- function(project, use.existing.gene.info = TRUE){
     file <- paste0("Limma_Voom_Use/",project,"_mrna_autosome_DGEList.RDS")
     saveRDS(d.auto, file=file)
     file <- paste0("Limma_Voom_Use/",project,"_mrna_sex_DGEList.RDS")
-    saveRDS(d.auto, file=file)
+    saveRDS(d.xy, file=file)
 
     print(paste0("Wrote ", file))
     print(paste0("Wrote ", gsub("sex","autosome", file)))
@@ -297,7 +297,7 @@ Create_miRNA_Data <- function(project){
     file <- paste0("Limma_Voom_Use/",project,"_mirna_autosome_DGEList.RDS")
     saveRDS(d.auto, file=file)
     file <- paste0("Limma_Voom_Use/",project,"_mirna_sex_DGEList.RDS")
-    saveRDS(d.auto, file=file)
+    saveRDS(d.xy, file=file)
 
     print(paste0("Wrote ", file))
     print(paste0("Wrote ", gsub("sex","autosome", file)))

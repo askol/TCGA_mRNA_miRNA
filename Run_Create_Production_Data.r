@@ -20,8 +20,7 @@ for (project in projects){
     write(file = job.file, paste0("R CMD BATCH  '--args ",project,
               "' /group/stranger-lab/askol/TCGA/Code/Create_Production_Data.r ",
               "/group/stranger-lab/askol/TCGA/Make_Production_Data/",project,".out"),
-              append=TRUE)
-    
+              append=TRUE)    
     system(paste("chmod +x", job.file))
 }
 
