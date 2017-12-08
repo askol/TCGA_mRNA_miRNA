@@ -11,7 +11,6 @@ library(peer)
 library(mvoutlier)
 library(ggplot2)
 library(GGally)
-library("biomaRt")
 library(Homo.sapiens)
     
 source("/group/stranger-lab/askol/TCGA/Code/Create_Production_Data_funcs.r")
@@ -315,6 +314,59 @@ Create_Production_Data <- function(project){
     print(paste0("Done with project ",project))
 
 }
+
+Get_Gene_Info <- function(IDs){
+
+    ## GET ALL POSSIBLE GENE IDS IN TCGA DATA ##
+    geneid <- system("awk '{print $1}' /group/stranger-lab/askol/TCGA/TCGA_Expression/TCGA-ACC.DATA.txt", intern=T)
+    geneid <- gsub("\\.[0-9].*$","", geneid[-1])
+    
+    genes <- select(Homo.sapiens, keys=geneid, columns=c("SYMBOL", "TXCHROM"), 
+                    keytype="ENSEMBL")
+    genes$CHR <- gsub("_.*$", "", genes$TXCHROM)
+    
+    ## REMOVE DUPLICATES
+    genes <- genes[-which(duplicated(
+        paste(genes$ENSEMBL, genes$CHR, genes$SYMBOL, sep="."))),]
+
+    dupe.ind <- which(duplicated(genes$ENSEMBL))
+    dupes <- unique(genes$ENSEMBL[dupe.ind])
+    for (dupe in dupes){
+        ind <- which(genes$ENSEMBL == dupe)
+        chrs <- unique(genes$CHR[ind], )
+        chrs <- paste(chrs[!is.na(chrs)], collapse=";")
+        symbols <- unique(genes$SYMBOL[ind])
+        symbols <- paste(symbols[!is.na(symbols)], collapse=";")
+       ##  print(paste(dupe,chrs, symbols))
+        genes$CHR[ind] <- chrs
+        genes$SYMBOL[ind] <- symbols
+    }
+    genes <- genes[-dupe.ind,]
+    
+    ## KEEP ONLY INFORMATION FOR GENES IN TCGA ##
+    genes <- genes[genes$ENSEMBL %in% geneid, ]
+    
+    mi.gene <- read.table("/group/stranger-lab/askol/TCGA/hsa_MTI-4.txt",
+                          as.is=T, header=T, sep="\t")
+    
+    mir.genes <- data.frame(mir.gene = unique(mi.gene$Target.Gene[-grep("Weak", mi.gene$Support.Type)]))
+    mir.genes <- merge(mir.genes, genes[,c("ENSEMBL", "SYMBOL")], by.x=1, by.y=2,
+                       keep.x=T, keep.y=F)
+    
+    ## ADD CHR INFO TO MIR GENES ##
+    mir.genes <- merge(mir.genes, genes[,c("SYMBOL","TXCHROM")],
+                       by.x = "mir.gene", by.y="SYMBOL", all.x =T, all.y=F)
+    
+    ## REMOVE SUFFIX FROM CHROMSOME NAME WHICH DESCRIBE SUBCHROMOSOMAL REGIONS ##
+    mir.genes$TXCHROM <- gsub("_.*$", "", mir.genes$TXCHROM)
+    
+    ## REMOVE DUPLATES BASED ON ENSEMBL.CHR COMBINATION ##
+    ind <- which(duplicated(paste(mir.genes$ENSEMBL, mir.genes$TXCHROM, sep=".")))
+    mir.genes <- mir.genes[-ind, ]
+
+    
+}
+
 
 ## ------ MAIN --------##
 args <- commandArgs(TRUE)

@@ -2,6 +2,9 @@ library("biomaRt")
 library(UpSetR)
 library(ggplot2)
 library(reshape2)
+library(limma)
+librray(voom)
+library(Homo.sapiens)
 
 source("/group/stranger-lab/askol/TCGA/Code/explore_expression_results_func.r")
 
@@ -16,31 +19,14 @@ projects = read.table(file = "../TCGA_Target_projects.txt", header=TRUE, as.is=T
 projects = projects[grep("TCGA",projects[,1]),1]
 
 
+geneid <- system("awk '{print $1}' /group/stranger-lab/askol/TCGA/TCGA_Expression/TCGA-ACC.DATA.txt", intern=T)
+geneid <- gsub("\\.[0-9].*$","", geneid[-1])
+genes <- select(Homo.sapiens, keys=geneid, columns=c("SYMBOL", "TXCHROM"), 
+                keytype="ENSEMBL")
+genes$CHR <- gsub("_*.$", "", genes$TXCHROM)
+genes <- genes[-which(duplicated(paste(genes$ENSEMBL, genes$CHR, sep="."))),]
 
-## get annotation for later ##
-load("TCGA-ACC_DE.Rdata")
-gene_set = result2$ensembl
-mart <- useDataset(dataset = "hsapiens_gene_ensembl",
-                   mart = useMart("ensembl",
-                       host    = "www.ensembl.org"))
-
-attribs = c("ensembl_gene_id", "entrezgene", "hgnc_symbol",
-    "chromosome_name", "start_position","end_position")
-resultTable <- getBM(attributes = attribs, filters = "ensembl_gene_id",
-                     values = gene_set, mart = mart)
-
-mtch = match(resultTable$ensembl_gene_id, result2$ensembl)
     
-for (attrib in attribs){
-
-    eval(parse(text = paste0("result2$", attrib, "=NA")))
-    eval(parse(text = paste0("result2$", attrib, "[mtch] = resultTable$",attrib)))
-}
-
-annot = result2[,c("ensembl","hgnc_symbol","chromosome_name","start_position",
-    "end_position")]
-annot <- as.data.frame(annot)
-
 ## GET GTEX DATA ##  
 gtex.use = get_gtex(gtexpFile, gtexqFile, gtexlfFile)
 gtex.use <- update.gtex(gtex.use)
@@ -50,18 +36,25 @@ mi.gene <- read.table("/group/stranger-lab/askol/TCGA/hsa_MTI-4.txt",
                       as.is=T, header=T, sep="\t")
 
 mir.genes <- data.frame(mir.gene = unique(mi.gene$Target.Gene[-grep("Weak", mi.gene$Support.Type)]))
-mir.genes <- merge(mir.genes, resultTable[,c("hgnc_symbol", "ensembl_gene_id")], by=1,
+mir.genes <- merge(mir.genes, genes[,c("ENSEMBL", "SYMBOL")], by.x=1, by.y=2,
                    keep.x=T, keep.y=F)
+
+## ADD CHR INFO TO MIR GENES ##
+mir.genes <- merge(mir.genes, genes[,c("SYMBOL","TXCHROM")],
+                   by.x = "mir.gene", by.y="SYMBOL", all.x =T, all.y=F)
+
+## REMOVE SUFFIX FROM CHROMSOME NAME WHICH DESCRIBE SUBCHROMOSOMAL REGIONS ##
+mir.genes$TXCHROM <- gsub("_.*$", "", mir.genes$TXCHROM)
+             )
+## REMOVE DUPLATES BASED ON ENSEMBL.CHR COMBINATION ##
+ind <- which(duplicated(paste(mir.genes$ENSEMBL, mir.genes$TXCHROM, sep="."))
+mir.genes <- mir.genes[-ind, ]
 
 ## SINGLE SEX CANCERS ##
 skip.cancers <- c("TCGA-BRCA","TCGA-OV", "TCGA-CESC", "TCGA-PRAD", "TCGA-TGCT", "TCGA-UCS", "TCGA-UCEC")
-## skip.tmp <- "TCGA-LUAD"
 
 sex.de.tbl = c()
 de.genes = list()
-
-## STORE RESULTS VARIABLE ##
-## store <- list()
 
 for (project in projects){
     
@@ -71,12 +64,24 @@ for (project in projects){
         next
     }
     
-    ## file = paste0(project, "_DE.Rdata")
-    file = paste0(project, "_result2.RData")
+    file = paste0(project, "_DE_limma.Rdata")
     if (!file.exists(file)){ next }
-
     load(file)
-  
+
+    ## BREAK GENES INTO CATEGORIES ##
+    ## GENES WITH STRONG EVIDENCE OF INTERACTIONS WITH MIRS
+    ## GENES WITH WEAK EVIDENCE OF INTERACTINOS WITH MIRS
+    ## GENES WITH NO EVIDENCE OF INTERACTIONS WITH MIRS
+    genes <- rownames(vfit$coeficients)
+    
+    gene.types <- rep(NA, nrow(vfit$coefficients))
+    gene.types.sex <- rep(NA, nrow(vfit.sex$coefficients))
+    gene.strong <- unique(mi.gene$Target.Gene[-grep("Weak", mi.gene$Support.Type)])
+    gene.weak <- unique(mi.gene$Target.Gene[!mi.gene$Target.Gene %in% gene.strong])
+    
+    ind <- which(rownames(vfit.coefficients) %in% 
+    
+    
     ## results2 is the relavent data.frame ##
     ## GET GENES WITH QVALUES OF 0.05 OR LESS ##
     result2$sig = 1*(result2$padj <= 0.05)

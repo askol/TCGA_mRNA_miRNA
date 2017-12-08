@@ -83,10 +83,10 @@ DE_by_covariate <- function(project, cov="gender"){
     colnames(design) <- gsub("group", "", colnames(design))       
     contr.matrix <- makeContrasts(Sex = male-female, levels = design)
     
-    v <- voom(count.sex, design, plot=FALSE)
-    vfit <- lmFit(v, design)
-    vfit <- contrasts.fit(vfit, contrasts=contr.matrix)
-    efit <- eBayes(vfit)
+    v.sex <- voom(count.sex, design, plot=FALSE)
+    vfit.sex <- lmFit(v.sex, design)
+    vfit.sex <- contrasts.fit(vfit.sex, contrasts=contr.matrix)
+    efit.sex <- eBayes(vfit.sex)
     
     save(list = ls(all.names = TRUE), file=paste0(project,"_DE_limma.Rdata"))
       

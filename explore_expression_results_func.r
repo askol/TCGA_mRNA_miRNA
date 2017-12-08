@@ -201,49 +201,50 @@ plot.no.de.mir.genes <- function(count.tbl){
 ## 
 plot.no.de.mir.gene.ol <- function(genes,
                                    plot.name = "No_DE_mir.genes_by_project_ol.pdf")
+    {
 
-    genes <- genes[,-1]
-    tbl <- c()
-    for (col in 1:ncol(genes)){
-
-        no.genes <- sum(genes[,col], na.rm=T)
-        no.genes.ol <- sum(genes[,col]==1 & rowSums(genes[,-col],
-                                    na.rm=T)>0)
-        tbl <- rbind(tbl, c(names(genes)[col], "unique", no.genes-no.genes.ol))
-        tbl <- rbind(tbl, c(names(genes)[col], "shared", no.genes.ol))
-    }
-    tbl <- as.data.frame(tbl)
-    names(tbl) <- c("project", "gene.type", "no.genes")
-    tbl$no.genes <- as.numeric(as.character(tbl$no.genes))   
-
-    header <- read.table(file = "/group/stranger-lab/askol/TCGA/TCGA_MetaData/Sex_table.txt",as.is=T, nrow=1)
-    samp.count <- read.table(file = "/group/stranger-lab/askol/TCGA/TCGA_MetaData/Sex_table.txt",as.is=T, skip=1)
-    names(samp.count) <- c("project",header)
-
-    samp.count$m.count <- rowSums(samp.count[,c("m.male","m.female")])
-    samp.count <- samp.count[samp.count$project %in% tbl$project,]
-    samp.count <- samp.count[match(tbl$project, samp.count$project), ]
-    samp.count$label <- paste0(samp.count$project, " (N = ", samp.count$m.count,")")
-    ## REMOVE TCGA ##
-    samp.count$label <- gsub("TCGA-","", samp.count$label)
-    
-    tbl$project <- samp.count$label
-    tmp <-dcast(tbl, project~gene.type)
-    levels <- tmp$project[order(rowSums(tmp[,-1]), decreasing=TRUE)]
-    tbl$project = factor(tbl$project, levels =levels)
-
-    pdf(plot.name, width = 8, height=6)
-    p <- ggplot(tbl) +
-        geom_col(aes(x = project, y = no.genes, fill = gene.type), position = "stack") +
-            theme_minimal() +
-                theme(text=element_text(size=14),
+        genes <- genes[,-1]
+        tbl <- c()
+        for (col in 1:ncol(genes)){
+            
+            no.genes <- sum(genes[,col], na.rm=T)
+            no.genes.ol <- sum(genes[,col]==1 & rowSums(genes[,-col],
+                                        na.rm=T)>0)
+            tbl <- rbind(tbl, c(names(genes)[col], "unique", no.genes-no.genes.ol))
+            tbl <- rbind(tbl, c(names(genes)[col], "shared", no.genes.ol))
+        }
+        tbl <- as.data.frame(tbl)
+        names(tbl) <- c("project", "gene.type", "no.genes")
+        tbl$no.genes <- as.numeric(as.character(tbl$no.genes))   
+        
+        header <- read.table(file = "/group/stranger-lab/askol/TCGA/TCGA_MetaData/Sex_table.txt",as.is=T, nrow=1)
+        samp.count <- read.table(file = "/group/stranger-lab/askol/TCGA/TCGA_MetaData/Sex_table.txt",as.is=T, skip=1)
+        names(samp.count) <- c("project",header)
+        
+        samp.count$m.count <- rowSums(samp.count[,c("m.male","m.female")])
+        samp.count <- samp.count[samp.count$project %in% tbl$project,]
+        samp.count <- samp.count[match(tbl$project, samp.count$project), ]
+        samp.count$label <- paste0(samp.count$project, " (N = ", samp.count$m.count,")")
+        ## REMOVE TCGA ##
+        samp.count$label <- gsub("TCGA-","", samp.count$label)
+        
+        tbl$project <- samp.count$label
+        tmp <-dcast(tbl, project~gene.type)
+        levels <- tmp$project[order(rowSums(tmp[,-1]), decreasing=TRUE)]
+        tbl$project = factor(tbl$project, levels =levels)
+        
+        pdf(plot.name, width = 8, height=6)
+        p <- ggplot(tbl) +
+            geom_col(aes(x = project, y = no.genes, fill = gene.type), position = "stack") +
+                theme_minimal() +
+                    theme(text=element_text(size=14),
                       axis.text.x = element_text(angle = 90, hjust = 1))+
                           ylab("Number DE Genes")
-                           
-    print(p)
-    dev.off()
-    
-}
+        
+        print(p)
+        dev.off()
+        
+    }
 
 plot.p.dist.canc.v.norm <- function(project, norm.ps, canc.ps){
 
