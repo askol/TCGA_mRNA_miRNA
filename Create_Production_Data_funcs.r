@@ -75,20 +75,6 @@ make.map.files <- function(project){
 
 }
 
-get.gene.info <- function(use.existing=TRUE){
-
-    ensembl = useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl")
-    gene.info <- getBM(attributes=c('ensembl_gene_id',
-                           'ensembl_transcript_id','hgnc_symbol','chromosome_name',
-                           'start_position','end_position', 'gene_biotype'), 
-                       mart = ensembl)
-    gene.info$id <- paste(gene.info$ensembl_gene_id, gene.info$hgnc_symbol,
-                          sep=".")
-    gene.info <- gene.info[!duplicated(gene.info$id),]
-    
-    return(gene.info)
-}
-
 if (0){
 
     dupe.ids <- unique(m.map$cases.0.samples.0.sample_id[duplicated( m.map$cases.0.samples.0.sample_id)])
@@ -151,31 +137,33 @@ get.m.data <- function(countFile, fpkmFile, map, gene.info){
     names(f)[1] <- "gene.id" 
     f$gene.id <- gsub("\\.[0-9]+", "", f$gene.id)
 
-    ensmbl <- data.frame(ensmbl = as.character(m$gene.id), stringsAsFactors=FALSE)
+    ## ensmbl <- data.frame(ensmbl = as.character(m$gene.id), stringsAsFactors=FALSE)
     
-    gene.info.in.m <- gene.info[gene.info$ensembl_gene_id %in% ensmbl[,1],]
+    ## gene.info.in.m <- gene.info[gene.info$ensembl_gene_id %in% ensmbl[,1],]
+
     ## ENSEMBL ID MAPS TO MULTIPLE GENES. CONCATINATE GENES WITH AND REDUCE MULTIPLE
     ## ENTRIES OF SINGLE ENSEMBL ID TO A SINGLE ENTRY
-    gene.info.in.m <- concat.dupes(gene.info.in.m)
+    ## gene.info.in.m <- concat.dupes(gene.info.in.m)
     
     ## MERGE ENSEMBL NAMES FROM MRNA DATA WITH GENE INFORMATION FROM BIOMART
-    ensmbl <- merge(ensmbl, gene.info.in.m[,c("ensembl_gene_id", "hgnc_symbol")], 
-                    by.x= "ensmbl", by.y="ensembl_gene_id",
-                    all.x=T, all.y=F)
+    ## ensmbl <- merge(ensmbl, gene.info.in.m[,c("ensembl_gene_id", "hgnc_symbol")], 
+    ##                by.x= "ensmbl", by.y="ensembl_gene_id",
+    ##                all.x=T, all.y=F)
     
     ## NOTE THAT ABOUT 3400 GENES DONT MAP TO A GENE NAME (NA or "")
     ## !!!!! EXCLUDING THESE GENES !!!! ##
     ## ANOTHER 27K+ ENSEMBL IDS HAVE "" FOR HGNC_SYMBOL.
     ## AT LEAST SOME ARE ANTISENSE RNA OR PROCESSED TRANSCRIPT ##
     ## ASSUMING THEY DON'T MAP FOR A REASON ##
-    ind.exclude <- which(is.na(ensmbl$hgnc_symbol) | ensmbl$hgnc_symbol == "")
+
+    ## ind.exclude <- which(is.na(ensmbl$hgnc_symbol) | ensmbl$hgnc_symbol == "")
     
-    ensmbl$hgnc_symbol[ind.exclude] <- ensmbl$ensmbl[ind.exclude]
-    m <- merge(ensmbl, m, by.x = "ensmbl", by.y="gene.id", all.x = FALSE, all.y=TRUE,
-               sort = FALSE)
+    ## ensmbl$hgnc_symbol[ind.exclude] <- ensmbl$ensmbl[ind.exclude]
+    ## m <- merge(ensmbl, m, by.x = "ensmbl", by.y="gene.id", all.x = FALSE, all.y=TRUE,
+    ##           sort = FALSE)
 
     ## REMOVE GENES WITH NO NAMES ##
-    m <- m[-grep("ENSG",m$hgnc_symbol), ]
+    ## m <- m[-grep("ENSG",m$hgnc_symbol), ]
 
     m <- straighten.up(m, f, map, data.type="m")
     
@@ -191,7 +179,9 @@ straighten.up <- function(data, f="",  map, data.type){
         names(data)[1] = "ID"
         map$file_id_use <- map$file_id_mi
     }else{
+        names(data)[1] <- "ensmbl"
         map$file_id_use <- map$file_name_m
+        
     }
     
     ## REMOVE NORMAL ##
@@ -291,7 +281,6 @@ straighten.up <- function(data, f="",  map, data.type){
         data <- clean.data(data, f=f, data.type=data.type)
     }
 
- 
     ## REPLACE FILE ID (CURRENT HEADER) WITH CASE ID ##
     ord <- match(gsub("A","",names(data)), map$file_id_use)
     names(data)[is.na(ord)==F] <- paste0("A",map$cases.0.case_id[ord[is.na(ord)==F]])
@@ -346,13 +335,23 @@ clean.data <- function(data, f="", data.type = "m"){
 
         rm.id <- union(f$gene.id[rm.ind.f], rm.id.1)
         rm.ind <- which(data[,rna.id.col] %in% rm.id)
+        
     }
-
+    
     print(paste0("Setting ",length(rm.ind), " of ",nrow(data), " to missing. ",
                  nrow(data)-length(rm.ind), " are not missing"))
     
-    data[rm.ind , -rna.id.col] = NA
-
+    data <- data[-rm.ind , ]
+    
+    ## EXCLUDE GENE/MIRNA IF 10 or FEWER ENTRIES HAVE DATA (E.G. REST NAS)
+    rm.genes <- which(rowSums(!is.na(data[,num.cols]))<=10)
+    if (length(rm.genes) >0){
+        data <- data[-rm.genes,]
+        print(paste0("Removing ",length(rm.genes), " genes due to too many NAs. ",
+                     "Fewer than 10 subjects with counts. "))
+        print(paste0(length(num.cols) - length(rm.genes), " genes/mirs remain"))
+    }
+    
     return(data)
 }
 
@@ -403,3 +402,54 @@ get.xy.mirs <- function(){
 
     return(xy.mirs)
 }
+
+get.mir.info <- function(){
+
+    ## GET MIR LOCATIONS FOR PRIMARY TRANSCRIPTS ##
+    mir.locs <- read.table(file = "/group/stranger-lab/askol/TCGA/hsa.gff3", skip = 13,
+                           header=FALSE, sep="\t")
+    ## KEEP ONLY PRIMARY TRANSCRIPT ENTRIES ##
+    keep.ind <- grep("primary",mir.locs[,3])
+    mir.locs <- mir.locs[ keep.ind, c(9,1,4,5)]
+    names(mir.locs) <- c("mir","chr","start","end")
+    mir.locs$mir = gsub(".*Name=","",mir.locs$mir)
+    mir.locs$mir = gsub(";.*","", mir.locs$mir)
+    
+    return(mir.locs)
+}
+
+get.mir.info.trim.name <- function(){
+
+    mir.locs <- get.mir.info()
+
+    ##    
+    mirs <- strsplit(split="-", mir.locs$mir)
+    mirs <- sapply(mirs, function(x){paste(x[1:3], collapse="-")})
+    mir.locs$mir.long <- mir.locs$mir
+    mir.locs$mir <- mirs
+
+    chrs <- with(mir.locs, tapply(chr, mir, paste, collapse=","))
+    chrs <- data.frame(mir = rownames(chrs), chrs=chrs)
+    
+    starts <- with(mir.locs, tapply(start, mir, paste, collapse=","))
+    starts <- data.frame(mir = rownames(starts), starts=starts)
+
+    ends <- with(mir.locs, tapply(end, mir, paste, collapse=","))
+    ends <- data.frame(mir = rownames(ends), ends=ends)
+
+    mir.longs <- with(mir.locs, tapply(mir.long, mir, paste, collapse=","))
+    mir.longs <- data.frame(mir = rownames(mir.longs), ends=ends)
+    
+    mir.locs <- merge(mir.locs, chrs, by="mir", all.x=T, all.y=F)
+    mir.locs <- merge(mir.locs, starts, by="mir", all.x=T, all.y=F)
+    mir.locs <- merge(mir.locs, ends, by="mir", all.x=T, all.y=F)
+    mir.locs <- merge(mir.locs, mir.longs, by="mir", all.x=T, all.y=F)
+    
+    ## REMOVE DUPES ##
+    dupe.ind <- which(duplicated(mir.locs$mir))
+    mir.locs <- mir.locs[-dupe.ind , -which(names(mir.locs) %in%
+                                            c("chr","start","end"))]
+    
+    return(mir.locs)
+}
+    

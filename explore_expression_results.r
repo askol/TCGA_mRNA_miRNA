@@ -1,9 +1,7 @@
-library("biomaRt")
 library(UpSetR)
 library(ggplot2)
 library(reshape2)
 library(limma)
-librray(voom)
 library(Homo.sapiens)
 
 source("/group/stranger-lab/askol/TCGA/Code/explore_expression_results_func.r")
